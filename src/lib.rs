@@ -3,18 +3,18 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub mod ability;
-pub mod nota_bene;
+pub mod caveats;
 
 pub use ability::{
     Ability, AbilityName, AbilityNameRef, AbilityNamespace, AbilityNamespaceRef, AbilityRef,
 };
-pub use nota_bene::NotaBeneCollection;
+pub use caveats::Caveats;
 
-pub type CapsInner<NB> = BTreeMap<UriString, BTreeMap<Ability, NotaBeneCollection<NB>>>;
+pub type CapsInner<C> = BTreeMap<UriString, BTreeMap<Ability, Caveats<C>>>;
 
 /// Representation of a set of delegated Capabilities.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct Capabilities<NB>(CapsInner<NB>);
+pub struct Capabilities<C>(CapsInner<C>);
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertError<A, B> {
@@ -27,7 +27,7 @@ pub enum ConvertError<A, B> {
 pub type ConvertResult<T, A, B, TA, TB> =
     Result<T, ConvertError<<TA as TryInto<A>>::Error, <TB as TryInto<B>>::Error>>;
 
-impl<NB> Capabilities<NB> {
+impl<C> Capabilities<C> {
     /// Create a new empty set of Capabilities.
     pub fn new() -> Self {
         Self(CapsInner::new())
@@ -46,7 +46,7 @@ impl<NB> Capabilities<NB> {
         &self,
         target: T,
         action: A,
-    ) -> ConvertResult<Option<&NotaBeneCollection<NB>>, UriString, Ability, T, A>
+    ) -> ConvertResult<Option<&Caveats<C>>, UriString, Ability, T, A>
     where
         T: TryInto<UriString>,
         A: TryInto<Ability>,
@@ -58,17 +58,17 @@ impl<NB> Capabilities<NB> {
     }
 
     /// Check if a particular action is allowed for the specified target, or is allowed globally, without type conversion.
-    pub fn can_do(&self, target: &UriString, action: &Ability) -> Option<&NotaBeneCollection<NB>> {
+    pub fn can_do(&self, target: &UriString, action: &Ability) -> Option<&Caveats<C>> {
         self.0.get(target).and_then(|m| m.get(action))
     }
 
     /// Merge this Capabilities set with another
-    pub fn merge<NB1, NB2>(self, other: Capabilities<NB1>) -> Capabilities<NB2>
+    pub fn merge<C1, C2>(self, other: Capabilities<C1>) -> Capabilities<C2>
     where
-        NB2: From<NB1> + From<NB>,
+        C2: From<C1> + From<C>,
     {
-        let mut s: Capabilities<NB2> = self.0.into();
-        let o: Capabilities<NB2> = other.0.into();
+        let mut s: Capabilities<C2> = self.0.into();
+        let o: Capabilities<C2> = other.0.into();
 
         for (uri, abs) in o.0.into_iter() {
             let res_entry = s.0.entry(uri).or_default();
@@ -80,12 +80,12 @@ impl<NB> Capabilities<NB> {
     }
 
     /// Merge this Capabilities set with another, where the two sets have different Nota Bene types.
-    pub fn merge_convert<NB1, NB2>(
+    pub fn merge_convert<C1, C2>(
         self,
-        other: Capabilities<NB1>,
-    ) -> ConvertResult<Capabilities<NB2>, NB2, NB2, NB, NB1>
+        other: Capabilities<C1>,
+    ) -> ConvertResult<Capabilities<C2>, C2, C2, C, C1>
     where
-        NB2: TryFrom<NB> + TryFrom<NB1>,
+        C2: TryFrom<C> + TryFrom<C1>,
     {
         Ok(try_convert(self)
             .map_err(ConvertError::A)?
@@ -97,7 +97,7 @@ impl<NB> Capabilities<NB> {
         &mut self,
         target: UriString,
         action: Ability,
-        nb: impl IntoIterator<Item = BTreeMap<String, NB>>,
+        nb: impl IntoIterator<Item = BTreeMap<String, C>>,
     ) -> &mut Self {
         self.0
             .entry(target)
@@ -115,7 +115,7 @@ impl<NB> Capabilities<NB> {
         &mut self,
         target: T,
         action: A,
-        nb: impl IntoIterator<Item = BTreeMap<String, NB>>,
+        nb: impl IntoIterator<Item = BTreeMap<String, C>>,
     ) -> Result<&mut Self, ConvertError<T::Error, A::Error>>
     where
         T: TryInto<UriString>,
@@ -132,7 +132,7 @@ impl<NB> Capabilities<NB> {
     pub fn with_actions(
         &mut self,
         target: UriString,
-        abilities: impl IntoIterator<Item = (Ability, impl IntoIterator<Item = BTreeMap<String, NB>>)>,
+        abilities: impl IntoIterator<Item = (Ability, impl IntoIterator<Item = BTreeMap<String, C>>)>,
     ) -> &mut Self {
         let entry = self.0.entry(target).or_default();
         for (ability, nbs) in abilities {
@@ -153,7 +153,7 @@ impl<NB> Capabilities<NB> {
     where
         T: TryInto<UriString>,
         A: TryInto<Ability>,
-        N: IntoIterator<Item = BTreeMap<String, NB>>,
+        N: IntoIterator<Item = BTreeMap<String, C>>,
     {
         Ok(self.with_actions(
             target.try_into().map_err(ConvertError::A)?,
@@ -166,7 +166,7 @@ impl<NB> Capabilities<NB> {
     }
 
     /// Read the set of abilities granted in this capabilities set
-    pub fn abilities(&self) -> &CapsInner<NB> {
+    pub fn abilities(&self) -> &CapsInner<C> {
         &self.0
     }
 
@@ -174,23 +174,23 @@ impl<NB> Capabilities<NB> {
     pub fn abilities_for<T>(
         &self,
         target: T,
-    ) -> Result<Option<&BTreeMap<Ability, NotaBeneCollection<NB>>>, T::Error>
+    ) -> Result<Option<&BTreeMap<Ability, Caveats<C>>>, T::Error>
     where
         T: TryInto<UriString>,
     {
         Ok(self.0.get(&target.try_into()?))
     }
 
-    pub fn into_inner(self) -> CapsInner<NB> {
+    pub fn into_inner(self) -> CapsInner<C> {
         self.0
     }
 }
 
-impl<NB1, NB2> From<CapsInner<NB1>> for Capabilities<NB2>
+impl<C1, C2> From<CapsInner<C1>> for Capabilities<C2>
 where
-    NB2: From<NB1>,
+    C2: From<C1>,
 {
-    fn from(attenuations: CapsInner<NB1>) -> Self {
+    fn from(attenuations: CapsInner<C1>) -> Self {
         Self(
             attenuations
                 .into_iter()
@@ -208,9 +208,9 @@ where
     }
 }
 
-pub fn try_convert<NB1, NB2>(caps: Capabilities<NB1>) -> Result<Capabilities<NB2>, NB2::Error>
+pub fn try_convert<C1, C2>(caps: Capabilities<C1>) -> Result<Capabilities<C2>, C2::Error>
 where
-    NB2: TryFrom<NB1>,
+    C2: TryFrom<C1>,
 {
     Ok(Capabilities(
         caps.0
@@ -220,16 +220,15 @@ where
                     uri,
                     abilities
                         .into_iter()
-                        .map(|(ability, nbs)| Ok((ability, nota_bene::try_convert(nbs)?)))
-                        .collect::<Result<BTreeMap<Ability, NotaBeneCollection<NB2>>, NB2::Error>>(
-                        )?,
+                        .map(|(ability, nbs)| Ok((ability, caveats::try_convert(nbs)?)))
+                        .collect::<Result<BTreeMap<Ability, Caveats<C2>>, C2::Error>>()?,
                 ))
             })
-            .collect::<Result<CapsInner<NB2>, NB2::Error>>()?,
+            .collect::<Result<CapsInner<C2>, C2::Error>>()?,
     ))
 }
 
-impl<NB> Default for Capabilities<NB> {
+impl<C> Default for Capabilities<C> {
     fn default() -> Self {
         Self::new()
     }
@@ -249,7 +248,7 @@ mod tests {
             caps.can("https://example.com", "crud/read")
                 .unwrap()
                 .unwrap(),
-            &NotaBeneCollection::<String>::new()
+            &Caveats::<String>::new()
         );
     }
 

@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 
 /// A collection of UCAN Nota Bene information.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NotaBeneCollection<T>(Vec<BTreeMap<String, T>>);
+pub struct Caveats<T>(Vec<BTreeMap<String, T>>);
 
-impl<T> NotaBeneCollection<T> {
+impl<T> Caveats<T> {
     /// Create a new empty set of Nota Bene information.
     pub fn new() -> Self {
         Self::default()
@@ -19,13 +19,13 @@ impl<T> NotaBeneCollection<T> {
     }
 }
 
-impl<T> Default for NotaBeneCollection<T> {
+impl<T> Default for Caveats<T> {
     fn default() -> Self {
         Self(Vec::new())
     }
 }
 
-impl<T> Serialize for NotaBeneCollection<T>
+impl<T> Serialize for Caveats<T>
 where
     T: Serialize,
 {
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<'de, T> Deserialize<'de> for NotaBeneCollection<T>
+impl<'de, T> Deserialize<'de> for Caveats<T>
 where
     T: Deserialize<'de>,
 {
@@ -73,13 +73,13 @@ where
     }
 }
 
-impl std::ops::DerefMut for NotaBeneCollection<String> {
+impl std::ops::DerefMut for Caveats<String> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl std::ops::Deref for NotaBeneCollection<String> {
+impl std::ops::Deref for Caveats<String> {
     type Target = Vec<BTreeMap<String, String>>;
 
     fn deref(&self) -> &Self::Target {
@@ -87,13 +87,13 @@ impl std::ops::Deref for NotaBeneCollection<String> {
     }
 }
 
-impl<T> AsRef<[BTreeMap<String, T>]> for NotaBeneCollection<T> {
+impl<T> AsRef<[BTreeMap<String, T>]> for Caveats<T> {
     fn as_ref(&self) -> &[BTreeMap<String, T>] {
         &self.0
     }
 }
 
-impl<T> IntoIterator for NotaBeneCollection<T> {
+impl<T> IntoIterator for Caveats<T> {
     type Item = BTreeMap<String, T>;
     type IntoIter = std::vec::IntoIter<BTreeMap<String, T>>;
 
@@ -102,13 +102,13 @@ impl<T> IntoIterator for NotaBeneCollection<T> {
     }
 }
 
-impl<T> Extend<BTreeMap<String, T>> for NotaBeneCollection<T> {
+impl<T> Extend<BTreeMap<String, T>> for Caveats<T> {
     fn extend<I: IntoIterator<Item = BTreeMap<String, T>>>(&mut self, iter: I) {
         self.0.extend(iter);
     }
 }
 
-impl<T1, T2> From<Vec<BTreeMap<String, T1>>> for NotaBeneCollection<T2>
+impl<T1, T2> From<Vec<BTreeMap<String, T1>>> for Caveats<T2>
 where
     T1: Into<T2>,
 {
@@ -121,13 +121,11 @@ where
     }
 }
 
-pub fn try_convert<T1, T2>(
-    nb1: NotaBeneCollection<T1>,
-) -> Result<NotaBeneCollection<T2>, <T2 as TryFrom<T1>>::Error>
+pub fn try_convert<T1, T2>(nb1: Caveats<T1>) -> Result<Caveats<T2>, <T2 as TryFrom<T1>>::Error>
 where
     T2: TryFrom<T1>,
 {
-    Ok(NotaBeneCollection(
+    Ok(Caveats(
         nb1.into_iter()
             .map(|nb| {
                 nb.into_iter()
@@ -144,10 +142,10 @@ mod tests {
 
     #[test]
     fn serde() {
-        let mut nb = NotaBeneCollection::<String>::new();
+        let mut nb = Caveats::<String>::new();
         assert_eq!(nb.len(), 0);
         assert_eq!(
-            serde_json::from_str::<NotaBeneCollection<String>>(r#"[{}]"#).unwrap(),
+            serde_json::from_str::<Caveats<String>>(r#"[{}]"#).unwrap(),
             nb
         );
         assert_eq!(serde_json::to_string(&nb).unwrap(), r#"[{}]"#);
